@@ -233,14 +233,13 @@ async function classifyImage(img, labels) {
     .map((prob, idx) => ({ label: labels[idx] || `Class ${idx}`, prob }))
     .sort((a, b) => b.prob - a.prob);
 
-  // Decision logic (same as single image prediction)
+  // Decision logic for batch processing:
+  // ≥ 75% confidence → classify as specific category
+  // < 75% confidence → ambiguous or unidentified
   const top1 = sorted[0];
-  const top2 = sorted[1];
 
   if (top1.prob >= 0.75) {
     return { category: top1.label, confidence: top1.prob };
-  } else if (top1.prob >= 0.4 && top2.prob >= 0.4) {
-    return { category: 'Ambiguous', confidence: top1.prob };
   } else {
     return { category: 'Ambiguous', confidence: top1.prob };
   }
