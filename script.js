@@ -45,6 +45,40 @@ function handleImageUpload(event) {
 }
 
 /**
+ * Shared decision logic for classification
+ * @param {Array} sorted - sorted array of {label, prob} objects
+ * @returns {Object} classification result with category, message, confidence
+ */
+function makeClassificationDecision(sorted) {
+  const top1 = sorted[0];
+  const top2 = sorted[1];
+
+  if (top1.prob >= 0.75) {
+    return {
+      category: top1.label,
+      message: `✅ Detected: ${top1.label} (confidence ${(top1.prob * 100).toFixed(1)}%)`,
+      confidence: top1.prob,
+      type: 'confident'
+    };
+  } else if (top1.prob >= 0.4 && top2.prob >= 0.4) {
+    return {
+      category: 'Ambiguous',
+      message: `🔍 Possible objects: ${top1.label} and ${top2.label}`,
+      confidence: top1.prob,
+      type: 'possible_multiple',
+      possibleLabels: [top1.label, top2.label]
+    };
+  } else {
+    return {
+      category: 'Ambiguous',
+      message: '⚠️ Cannot identify, image unclear.',
+      confidence: top1.prob,
+      type: 'unclear'
+    };
+  }
+}
+
+/**
  * Preprocess the image and run prediction.
  * @param {HTMLImageElement} img
  */
@@ -79,20 +113,9 @@ async function predict(img) {
     .map((prob, idx) => ({ label: labels[idx] || `Class ${idx}`, prob }))
     .sort((a, b) => b.prob - a.prob);
 
-  // Decision logic
-  const top1 = sorted[0];
-  const top2 = sorted[1];
-
-  let message = '';
-  if (top1.prob >= 0.75) {
-    message = `✅ Detected: ${top1.label} (confidence ${(top1.prob * 100).toFixed(1)}%)`;
-  } else if (top1.prob >= 0.4 && top2.prob >= 0.4) {
-    message = `🔍 Possible objects: ${top1.label} and ${top2.label}`;
-  } else {
-    message = '⚠️ Cannot identify, image unclear.';
-  }
-
-  resultDiv.textContent = message;
+  // Use shared decision logic
+  const result = makeClassificationDecision(sorted);
+  resultDiv.textContent = result.message;
 }
 
 /**
@@ -233,16 +256,9 @@ async function classifyImage(img, labels) {
     .map((prob, idx) => ({ label: labels[idx] || `Class ${idx}`, prob }))
     .sort((a, b) => b.prob - a.prob);
 
-  // Decision logic for batch processing:
-  // ≥ 75% confidence → classify as specific category
-  // < 75% confidence → ambiguous or unidentified
-  const top1 = sorted[0];
-
-  if (top1.prob >= 0.75) {
-    return { category: top1.label, confidence: top1.prob };
-  } else {
-    return { category: 'Ambiguous', confidence: top1.prob };
-  }
+  // Use the same decision logic as individual processing
+  const result = makeClassificationDecision(sorted);
+  return result;
 }
 
 /**
