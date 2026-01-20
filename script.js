@@ -192,14 +192,27 @@ async function processFolder() {
       const img = await loadImageFromFile(file);
       const classification = await classifyImage(img, labels);
       
+      // Store file object, name, confidence, and image data URL
+      const fileData = {
+        file: file,
+        fileName: fileName,
+        confidence: classification.confidence,
+        dataURL: img.src // img.src contains the data URL from loadImageFromFile
+      };
+      
       if (classification.category === 'Ambiguous') {
-        results['Ambiguous'].push(fileName);
+        results['Ambiguous'].push(fileData);
       } else {
-        results[classification.category].push(fileName);
+        results[classification.category].push(fileData);
       }
     } catch (error) {
       console.error(`Error processing ${fileName}:`, error);
-      results['Ambiguous'].push(fileName);
+      results['Ambiguous'].push({
+        file: file,
+        fileName: fileName,
+        confidence: 0,
+        dataURL: null
+      });
     }
 
     // Update progress
@@ -268,22 +281,41 @@ function displayBatchResults(results, totalImages) {
   let html = '<h2 style="font-size: 1.3rem; margin-bottom: 1rem; text-align: center;">Batch Processing Results</h2>';
   html += `<p style="text-align: center; margin-bottom: 1rem; font-weight: bold;">Total images processed: ${totalImages}</p>`;
 
-  // Display each category that has results
-  const categories = ['Blower', 'Filter', 'Coil', 'Motor', 'Exterior', 'Damper', 'Ambiguous'];
+  // Display each category that has results (exclude Ambiguous)
+  const categories = ['Blower', 'Filter', 'Coil', 'Motor', 'Exterior', 'Damper'];
+  const MAX_IMAGES_PER_CATEGORY = 6;
   
   categories.forEach(category => {
     const files = results[category];
     if (files.length > 0) {
-      const count = files.length;
-      const label = category === 'Ambiguous' ? 'Ambiguous or Unidentified' : category.toLowerCase() + (count === 1 ? '' : 's');
+      // Sort by confidence descending and take top 6
+      const sortedFiles = files
+        .sort((a, b) => b.confidence - a.confidence)
+        .slice(0, MAX_IMAGES_PER_CATEGORY);
+      
+      const totalCount = files.length;
+      const displayCount = sortedFiles.length;
+      const label = category.toLowerCase() + (totalCount === 1 ? '' : 's');
       
       html += `<div class="category-section">`;
-      html += `<div class="category-title">Found ${count} ${label}</div>`;
-      html += `<ul class="file-list">`;
-      files.forEach(fileName => {
-        html += `<li>${fileName}</li>`;
+      html += `<div class="category-title">Found ${totalCount} ${label}`;
+      if (displayCount < totalCount) {
+        html += ` (showing top ${displayCount})`;
+      }
+      html += `</div>`;
+      
+      // Display images in a grid
+      html += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">`;
+      sortedFiles.forEach(fileData => {
+        html += `<div style="border: 1px solid #ddd; border-radius: 8px; padding: 0.5rem; text-align: center; background: white;">`;
+        if (fileData.dataURL) {
+          html += `<img src="${fileData.dataURL}" style="width: 100%; height: 150px; object-fit: cover; border-radius: 4px; margin-bottom: 0.5rem;" alt="${fileData.fileName}">`;
+        }
+        html += `<div style="font-size: 0.85rem; font-weight: bold; margin-bottom: 0.25rem; word-break: break-word;">${fileData.fileName}</div>`;
+        html += `<div style="font-size: 0.75rem; color: #666;">Confidence: ${(fileData.confidence * 100).toFixed(1)}%</div>`;
+        html += `</div>`;
       });
-      html += `</ul></div>`;
+      html += `</div></div>`;
     }
   });
 
